@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="robots" content="noindex, nofollow">
+<title>Aperture Handbook</title>
+<!-- GitHub shows this for any address it doesn't have. A handbook address (…/h/…) opened before this browser has signed in
+     goes to the sign-in page, which sends it back to the same page afterwards. Written by build-github.mjs. -->
+<script>
+(function () {
+  var p = location.pathname, i = p.indexOf("/h/");
+  if (i >= 0) location.replace(p.slice(0, i + 1) + "?next=" + encodeURIComponent(decodeURIComponent(p.slice(i + 3)) + location.search) + location.hash);
+})();
+</script>
+</head>
+<body style="font-family:sans-serif;padding:2rem;background:#FBF6EC;color:#2B2A25">
+<p>Page not found.</p>
+</body>
+</html>

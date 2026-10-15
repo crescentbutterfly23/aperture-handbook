@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Aperture Handbook</title>
+<link rel="icon" type="image/png" href="favicon.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@300;400;500&family=Cormorant+Garamond:wght@400&display=swap" rel="stylesheet">
+<!-- Aperture Handbook (GitHub copy): the sign-in page. Written by build-github.mjs.
+     The password never leaves the browser: it is turned into the decryption key here (PBKDF2, the salt is in gate.json),
+     checked against gate.json, and the key is kept on this device for 30 days for sw.js to read the handbook with. -->
+<style>
+:root{--bg:#FBF6EC;--paper:#FFFFFF;--ink:#2B2A25;--muted:#6E6A5E;--line:rgba(43,42,37,.25);--bar:#0C1115;--on-bar:#F3EEE3;--err:#9A3B2E;
+  --serif:"Cormorant Garamond",Garamond,Georgia,serif;--sans:Archivo,"Helvetica Neue",Helvetica,Arial,sans-serif}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--bg:#0C1115;--paper:#11171C;--ink:#F3EEE3;--muted:#A7A398;--line:rgba(251,246,236,.22);--bar:#05080A;--err:#E08B7C}}
+:root[data-theme="dark"]{--bg:#0C1115;--paper:#11171C;--ink:#F3EEE3;--muted:#A7A398;--line:rgba(251,246,236,.22);--bar:#05080A;--err:#E08B7C}
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%}
+body{background:var(--bg);color:var(--ink);font:300 16px/1.6 var(--sans);display:flex;flex-direction:column;min-height:100vh}
+header{background:var(--bar);padding:18px 16px}
+header img{height:22px;display:block;margin:0 auto;max-width:100%}
+main{flex:1;display:flex;align-items:center;justify-content:center;padding:48px 16px}
+.box{width:100%;max-width:400px}
+.eyebrow{font:500 11px/1 var(--sans);letter-spacing:.22em;text-transform:uppercase;color:var(--muted);margin:0 0 14px}
+h1{font:400 44px/1.05 var(--serif);margin:0 0 28px}
+label{display:block;font:500 11px/1 var(--sans);letter-spacing:.18em;text-transform:uppercase;color:var(--muted);margin:0 0 10px}
+input{width:100%;font:300 17px var(--sans);color:var(--ink);background:var(--paper);border:1px solid var(--line);border-radius:0;padding:13px 14px;outline:none}
+input:focus{border-color:var(--ink)}
+button{margin-top:16px;width:100%;font:500 12px/1 var(--sans);letter-spacing:.2em;text-transform:uppercase;color:var(--on-bar);background:var(--bar);border:1px solid var(--bar);border-radius:0;padding:16px;cursor:pointer}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) button{background:var(--on-bar);color:#0C1115;border-color:var(--on-bar)}}
+button:disabled{opacity:.6;cursor:default}
+.msg{min-height:1.6em;margin:14px 0 0;font-size:14px;color:var(--muted)}
+.msg.err{color:var(--err)}
+.note{margin-top:36px;padding-top:16px;border-top:1px solid var(--line);font-size:13px;color:var(--muted)}
+</style>
+</head>
+<body>
+<header><img src="logo.svg" alt="Aperture Global"></header>
+<main><div class="box">
+  <p class="eyebrow">Aperture Global</p>
+  <h1>Aperture Handbook</h1>
+  <form id="f" autocomplete="on">
+    <input type="text" name="username" value="Aperture Handbook" autocomplete="username" hidden>
+    <label for="pw">Password</label>
+    <input id="pw" type="password" autocomplete="current-password" required autofocus>
+    <button id="go" type="submit">Open the handbook</button>
+    <p id="msg" class="msg" role="status" aria-live="polite"></p>
+  </form>
+  <p class="note">This device stays signed in for 30 days.</p>
+</div></main>
+<script>
+(function () {
+  var DB = "aperture-handbook", DAYS = 30;
+  var msg = document.getElementById("msg"), go = document.getElementById("go");
+  function say(t, err) { msg.textContent = t; msg.className = "msg" + (err ? " err" : ""); }
+  // where to go after signing in: only a path inside the handbook
+  var next = new URLSearchParams(location.search).get("next") || "";
+  if (/^\/|\/\/|:|\\/.test(next)) next = "";
+  function open() { location.replace("h/" + next.split("/").map(encodeURIComponent).join("/").replace(/%3F/g, "?").replace(/%3D/g, "=").replace(/%26/g, "&") + location.hash); }
+
+  if (!("serviceWorker" in navigator) || !window.indexedDB || !window.crypto || !crypto.subtle) {
+    say("This browser can't open the handbook. Try Chrome, Edge or Safari, outside a private window.", true);
+    go.disabled = true; return;
+  }
+  var ready = navigator.serviceWorker.register("sw.js").then(function () { return navigator.serviceWorker.ready; });
+
+  function idb(mode, fn) {
+    return new Promise(function (ok, fail) {
+      var r = indexedDB.open(DB, 1);
+      r.onupgradeneeded = function () { r.result.createObjectStore("keys"); };
+      r.onerror = function () { fail(r.error); };
+      r.onsuccess = function () {
+        var tx = r.result.transaction("keys", mode), q = fn(tx.objectStore("keys"));
+        tx.oncomplete = function () { ok(q && q.result); };
+        tx.onerror = function () { fail(tx.error); };
+      };
+    });
+  }
+  var b64 = function (s) { return Uint8Array.from(atob(s), function (c) { return c.charCodeAt(0); }); };
+
+  // already signed in on this device: straight through
+  idb("readonly", function (s) { return s.get("k"); }).then(function (k) {
+    if (k && k.exp > Date.now()) { say("Opening…"); ready.then(open); }
+  }).catch(function () {});
+
+  document.getElementById("f").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var pw = document.getElementById("pw").value;
+    go.disabled = true; say("Checking…");
+    fetch("gate.json", { cache: "no-cache" }).then(function (r) { return r.json(); }).then(function (gate) {
+      return crypto.subtle.importKey("raw", new TextEncoder().encode(pw), "PBKDF2", false, ["deriveBits"]).then(function (base) {
+        return crypto.subtle.deriveBits({ name: "PBKDF2", hash: "SHA-256", salt: b64(gate.salt), iterations: gate.iter }, base, 512);
+      }).then(function (bits) {
+        bits = new Uint8Array(bits);
+        return Promise.all([
+          crypto.subtle.importKey("raw", bits.slice(0, 32), { name: "AES-GCM" }, false, ["decrypt"]),
+          crypto.subtle.importKey("raw", bits.slice(32, 64), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]),
+        ]);
+      }).then(function (k) {
+        var box = b64(gate.check);
+        return crypto.subtle.decrypt({ name: "AES-GCM", iv: box.slice(0, 12) }, k[0], box.slice(12)).then(function () { return k; },
+          function () { throw new Error("wrong"); });
+      });
+    }).then(function (k) {
+      return idb("readwrite", function (s) { return s.put({ enc: k[0], name: k[1], exp: Date.now() + DAYS * 864e5 }, "k"); });
+    }).then(function () { return ready; }).then(function (reg) {
+      if (reg.active) reg.active.postMessage("keys-changed");
+      say("Opening…"); open();
+    }).catch(function (err) {
+      go.disabled = false;
+      say(err && err.message === "wrong" ? "That password isn't right." : "Something went wrong. Reload the page and try again.", true);
+      document.getElementById("pw").select();
+    });
+  });
+})();
+</script>
+</body>
+</html>
